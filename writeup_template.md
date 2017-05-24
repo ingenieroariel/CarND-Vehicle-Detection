@@ -1,6 +1,4 @@
-##Writeup Template
-###You can use this file as a template for your writeup if you want to submit it as a markdown file, but feel free to use some other method and submit a pdf if you prefer.
-
+##Vehicle Detection
 ---
 
 **Vehicle Detection Project**
@@ -18,7 +16,7 @@ The goals / steps of this project are the following:
 [image1]: ./examples/car_not_car.png
 [image2]: ./examples/HOG_example.jpg
 [image3]: ./examples/sliding_windows.jpg
-[image4]: ./examples/sliding_window.jpg
+[image4]: ./examples/sliding_window.png
 [image5]: ./examples/bboxes_and_heat.png
 [image6]: ./examples/labels_map.png
 [image7]: ./examples/output_bboxes.png
@@ -30,46 +28,57 @@ The goals / steps of this project are the following:
 ---
 ###Writeup / README
 
-####1. Provide a Writeup / README that includes all the rubric points and how you addressed each one.  You can submit your writeup as markdown or pdf.  [Here](https://github.com/udacity/CarND-Vehicle-Detection/blob/master/writeup_template.md) is a template writeup for this project you can use as a guide and a starting point.  
-
-You're reading it!
+This is it!
 
 ###Histogram of Oriented Gradients (HOG)
 
 ####1. Explain how (and identify where in your code) you extracted HOG features from the training images.
 
-The code for this step is contained in the first code cell of the IPython notebook (or in lines # through # of the file called `some_file.py`).  
+I extracted HOG features on cell #3 using the `hog` function from Scikit-Learn.
 
-I started by reading in all the `vehicle` and `non-vehicle` images.  Here is an example of one of each of the `vehicle` and `non-vehicle` classes:
+Here are two examples of `vehicle` and `non-vehicle`:
 
 ![alt text][image1]
 
-I then explored different color spaces and different `skimage.hog()` parameters (`orientations`, `pixels_per_cell`, and `cells_per_block`).  I grabbed random images from each of the two classes and displayed them to get a feel for what the `skimage.hog()` output looks like.
-
-Here is an example using the `YCrCb` color space and HOG parameters of `orientations=8`, `pixels_per_cell=(8, 8)` and `cells_per_block=(2, 2)`:
-
-
-![alt text][image2]
+I settled on the `YCrCb` colorspace after testing `RGB`, `HSV` and `YUV`. 
 
 ####2. Explain how you settled on your final choice of HOG parameters.
 
-I tried various combinations of parameters and...
+I did not do a lot of parameter tweaking on the HOG apart from what we got from the course. My experiments changing the pixes per cell to higher numbers to make the detection faster ended up backfiring with lower recall, so I stayed with (8, 8) pixes per cell and (32 x 32) spatial size. One important change was changing the histogram bins number from 32 in the examples to a lower (16) to lower the dimentionality and improve the classifier.
 
 ####3. Describe how (and identify where in your code) you trained a classifier using your selected HOG features (and color features if you used them).
 
-I trained a linear SVM using...
+I used a RobustScaler before feeding the data to the SVM  in cell `#4`, this took care of having zero mean and unitary standard deviation. I split data in 80% training and 20% testing and tried a few values of K. All in all, the testing most of the times reported very high numbers (above 98%) in testing but the training data was not well fitted for the example video, actual performance on the testing video is a lot lower than in testing.
+
+Here are the actual parameters:
+
+```
+LinearSVC(C=100000, class_weight=None, dual=True, fit_intercept=True,
+     intercept_scaling=1, loss='squared_hinge', max_iter=1000,
+     multi_class='ovr', penalty='l2', random_state=None, tol=0.0001,
+     verbose=0)
+```
 
 ###Sliding Window Search
 
 ####1. Describe how (and identify where in your code) you implemented a sliding window search.  How did you decide what scales to search and how much to overlap windows?
 
-I decided to search random window positions at random scales all over the image and came up with this (ok just kidding I didn't actually ;):
+I decided to settle on 3 window sizes and aggregate the output in order to have a better heatmap. This resulted in better performance and results than just increasing the overlap value.
 
-![alt text][image3]
+```
+ for window_size in [(60, 60), (75, 75), (90, 90), (120, 120)]:
+        
+        raw_windows = slide_window(img, ...) 
+    
+        some_hot_windows = search_windows(raw_windows, ...)
+        
+        hot_windows = hot_windows + some_hot_windows
+
+```
 
 ####2. Show some examples of test images to demonstrate how your pipeline is working.  What did you do to optimize the performance of your classifier?
 
-Ultimately I searched on two scales using YCrCb 3-channel HOG features plus spatially binned color and histograms of color in the feature vector, which provided a nice result.  Here are some example images:
+I created a video based pipeline demonstrator, it captures what each part of the pipeline sees and helped me a lot during debugging. The key insight as described before was using different window sizes, this helped group windows together on the car without creating a lot of false positives. Another thing that helped a lot was restricting the image to just the `y` pixels between `350` and `650` instead of the whole image. Similarly removing the left part of the image improved time and results but I ended up not doing it because that would simplify the problem too much and I should not assume that there are no cars on the curb.
 
 ![alt text][image4]
 ---
@@ -82,21 +91,11 @@ Here's a [link to my video result](./project_video.mp4)
 
 ####2. Describe how (and identify where in your code) you implemented some kind of filter for false positives and some method for combining overlapping bounding boxes.
 
-I recorded the positions of positive detections in each frame of the video.  From the positive detections I created a heatmap and then thresholded that map to identify vehicle positions.  I then used `scipy.ndimage.measurements.label()` to identify individual blobs in the heatmap.  I then assumed each blob corresponded to a vehicle.  I constructed bounding boxes to cover the area of each blob detected.  
+I created a heatmap with all the positive detections and used `scipy.ndimage.measurements.label()` to identify individual blobs in the heatmap.  I then assumed each blob corresponded to a vehicle.  I constructed bounding boxes to cover the area of each blob detected. 
 
-Here's an example result showing the heatmap from a series of frames of video, the result of `scipy.ndimage.measurements.label()` and the bounding boxes then overlaid on the last frame of video:
+Since it took a few seconds per frame and a couple of hours to process the whole video with my pipeline, I also wrote to a file called labels.txt the bboxes per frame. I optimized to have total recall and make sure the cars were always detected on labels.txt. Futures iterations to improve precision and remove false positives can be done using that file. 
 
-### Here are six frames and their corresponding heatmaps:
-
-![alt text][image5]
-
-### Here is the output of `scipy.ndimage.measurements.label()` on the integrated heatmap from all six frames:
-![alt text][image6]
-
-### Here the resulting bounding boxes are drawn onto the last frame in the series:
-![alt text][image7]
-
-
+The heatmap and all the other steps can be seen in my  [video result](./output_video.mp4)
 
 ---
 
@@ -104,5 +103,4 @@ Here's an example result showing the heatmap from a series of frames of video, t
 
 ####1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
 
-Here I'll talk about the approach I took, what techniques I used, what worked and why, where the pipeline might fail and how I might improve it if I were going to pursue this project further.  
-
+Main issues to work on in the future are the removal of false positives, and the inclusion of negative examples from the left side of the image. Anything detected there can be automatically fed to the SVM classifier to tweak it and make sure they are ignored. Improving the overlap on the sliding windows, in particular the Y axis is the best way to make the heatmap value jump up to 20 or 30 and successfully differentiate it from the noise in the left, unfortunately due to how long my pipeline takes to run I could not experiment more. It is important to note that a big part of the reason my pipeline takes a few seconds per image is due to the lot of `img.copy` and rendering done for the diagnosis. I tested YOLO v2 using darkflow and got way better and faster results, realtime on my GTX1070.
